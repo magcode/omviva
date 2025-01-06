@@ -32,7 +32,9 @@ async def sync():
     viva = OmronBLE(logger=logger, bleAddr=config["VIVA_MAC"])
     persistence = VivaPersistence(db_name="viva_measurements.db")
 
-    # idea is to cycle between users
+    # we don't know for which user the transmission should be started
+    # also we cannot read all users in one connect cycle
+    # so the idea is to cycle between users
     noOfUsers = config["NO_OF_USERS"]
     last_user = persistence.get_last_sync_user()
     if last_user[0]:
@@ -57,13 +59,15 @@ async def sync():
         allRecs = await viva.get_records(user, lastSeq + 1)
         for rec in allRecs:
             persistence.persist_measurement(rec)
+
+        logger.info(f"Syncing done for user #{user}")
         persistence.store_success(user)
         await viva.disconnect()
     except Exception as e:
         logger.error(f"Error: {e}")
     finally:
         persistence.close()
-    
+
     isReading = False
 
 
@@ -79,17 +83,22 @@ async def pair():
         logger.error(f"Error: {e}")
 
 
-async def simple_callback(device: BLEDevice, advertisement_data: AdvertisementData):
+async def bl_passive_scan_callback(device: BLEDevice, advertisement_data: AdvertisementData):
     if device.address == config["VIVA_MAC"] and isReading is False:
-        logger.info(f"I found {device.name}")
+        logger.info(f"I found {device.name} via passive scan")
         await scanner.stop()
         await sync()
 
 
-async def scan():
+async def bl_passive_scan():
+    # this requires BLE passive scanning. See https://github.com/hbldh/bleak/pull/884
+    # flag --experimental is needed
+    # BlueZ >= 5.56
+    # Linux kernel >= 5.10.
+
     global scanner
     scanner = BleakScanner(
-        simple_callback,
+        bl_passive_scan_callback,
         None,
         scanning_mode="passive",
         bluez=BlueZScannerArgs(
@@ -101,12 +110,11 @@ async def scan():
 
     while True:
         if isReading is False:
-            #logger.info("(Re)starting scanner for Omron VIVA")
             await scanner.start()
             await asyncio.sleep(10.0)
             await scanner.stop()
         else:
-            logger.info("Waiting for sync to finish")
+            logger.info("Waiting for sync to finish before scanning again")
             await asyncio.sleep(60.0)
 
 
@@ -115,4 +123,7 @@ if __name__ == "__main__":
     logger = logging.getLogger("omviva")
     setupLogging(logger, config)
     logger.info("Omron VIVA Sync Tool started")
-    asyncio.run(scan())
+    if config["TRIGGER_MODE"] == "mqtt":
+        logger.info("MQTT trigger mode not implemented yet")
+    else:
+        asyncio.run(bl_passive_scan())

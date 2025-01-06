@@ -28,15 +28,18 @@ class OmronBLE:
         self.ble_client = None
 
     async def connect(self):
-        self.logger.info(f"Attempt connecting to {self.bleAddr}.")
-        self.ble_client = bleak.BleakClient(self.bleAddr)
+        self.ble_client = bleak.BleakClient(self.bleAddr, timeout=10)
         try:
+            self.logger.info(f"Attempt connecting to {self.bleAddr}.")
             await self.ble_client.connect()
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(1)
             await self.ble_client.pair(protection_level=2)
             self.logger.info("pair done")
         except BleakDeviceNotFoundError as e:
             self.logger.error(f"Device not found. {e}")
+            raise e
+        except Exception as e:
+            self.logger.error(f"Something else {e}")
             raise e
 
     async def disconnect(self):
