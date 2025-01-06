@@ -1,4 +1,6 @@
 from datetime import datetime
+
+from aiomqtt import Client
 from omviva_comms import OmronBLE
 import asyncio
 import logging
@@ -12,11 +14,38 @@ from bleak.assigned_numbers import AdvertisementDataType
 from bleak.backends.bluezdbus.advertisement_monitor import OrPattern
 from bleak.backends.bluezdbus.scanner import BlueZScannerArgs
 from bleak.backends.scanner import AdvertisementData
+from scp import SCPClient
+import paramiko
+
 
 logger = None
 config = None
 isReading = False
 scanner = None
+
+DATABASE_NAME = "viva_measurements.db"
+
+
+async def mqtt_listener():
+    # this assumes that "something" is informing us that the Omron VIVA is ready to be read
+    # this something can be a bluetooth passive scanning script on a shelly bluetooth device
+    async with Client(config["MQTT_HOST"]) as client:
+        await client.subscribe(config["MQTT_TOPIC"])
+        async for message in client.messages:
+            if isReading is False:
+                logger.info("Got sync command via MQTT")
+                await sync()
+
+
+def scp_transfer(local_file, remote_file, hostname, username, password):
+    client = paramiko.SSHClient()
+    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    client.connect(hostname, username=username, password=password)
+
+    with SCPClient(client.get_transport()) as scp:
+        scp.put(local_file, remote_file)
+
+    client.close()
 
 
 def getConfig():
@@ -26,52 +55,73 @@ def getConfig():
         return config
 
 
+# Example usage
+
+
 async def sync():
     global isReading
     isReading = True
-    viva = OmronBLE(logger=logger, bleAddr=config["VIVA_MAC"])
-    persistence = VivaPersistence(db_name="viva_measurements.db")
+    success = False
+    attempts = 0
+    while not success:
+        attempts += 1
+        viva = OmronBLE(logger=logger, bleAddr=config["VIVA_MAC"])
+        persistence = VivaPersistence(db_name=DATABASE_NAME)
 
-    # we don't know for which user the transmission should be started
-    # also we cannot read all users in one connect cycle
-    # so the idea is to cycle between users
-    noOfUsers = config["NO_OF_USERS"]
-    last_user = persistence.get_last_sync_user()
-    if last_user[0]:
-        last_sync_time = datetime.fromtimestamp(last_user[0]).strftime("%Y-%m-%d %H:%M:%S")
-        user = last_user[1] + 1
-        if user > noOfUsers:
+        # we don't know for which user the transmission should be started
+        # also we cannot read all users in one connect cycle
+        # so the idea is to cycle between users
+        noOfUsers = config["NO_OF_USERS"]
+        last_user = persistence.get_last_sync_user()
+        if last_user[0]:
+            last_sync_time = datetime.fromtimestamp(last_user[0]).strftime("%Y-%m-%d %H:%M:%S")
+            user = last_user[1] + 1
+            if user > noOfUsers:
+                user = 1
+            logger.info(f"Last user was #{last_user[1]} on {last_sync_time}. Next user is #{user}")
+        else:
             user = 1
-        logger.info(f"Last user was #{last_user[1]} on {last_sync_time}. Next user is #{user}")
-    else:
-        user = 1
-        logger.info(f"First sync, starting with user #{user}")
+            logger.info(f"First sync, starting with user #{user}")
 
-    lastSeq = persistence.get_highest_sequence_number_for_user(user)
-    if lastSeq is None:
-        lastSeq = 0
-    logger.info(f"Last sequence for user #{user} was {lastSeq}")
+        lastSeq = persistence.get_highest_sequence_number_for_user(user)
+        if lastSeq is None:
+            lastSeq = 0
+        logger.info(f"Last sequence for user #{user} was {lastSeq}")
 
-    try:
-        await asyncio.sleep(2)
-        await viva.connect()
-        logger.info(f"Syncing user #{user}")
-        allRecs = await viva.get_records(user, lastSeq + 1)
-        for rec in allRecs:
-            persistence.persist_measurement(rec)
+        try:
+            await asyncio.sleep(2)
+            await viva.connect()
+            logger.info(f"Syncing user #{user}")
+            allRecs = await viva.get_records(user, lastSeq + 1)
+            for rec in allRecs:
+                persistence.persist_measurement(rec)
 
-        logger.info(f"Syncing done for user #{user}")
-        persistence.store_success(user)
-        await viva.disconnect()
-    except Exception as e:
-        logger.error(f"Error: {e}")
-    finally:
-        persistence.close()
+            logger.info(f"Syncing done for user #{user}")
+            persistence.store_success(user)
+            await viva.disconnect()
+            success = True
+        except Exception as e:
+            logger.error(f"Error syncing (attempt {attempts}): {e}")
+        finally:
+            persistence.close()
+            if config["SCP_HOST"]:
+                scp_transfer(
+                    DATABASE_NAME,
+                    config["SCP_PATH"] + DATABASE_NAME,
+                    config["SCP_HOST"],
+                    config["SCP_USER"],
+                    config["SCP_PASSWORD"],
+                )
+                logger.info("Database transferred to remote host")
 
+        if attempts > 3:
+            logger.error("Max attempts reached, aborting sync")
+            break
     isReading = False
 
 
 async def pair():
+    # TODO
     user = 2
     viva = OmronBLE(logger=logger, bleAddr=config["VIVA_MAC"])
 
@@ -124,6 +174,8 @@ if __name__ == "__main__":
     setupLogging(logger, config)
     logger.info("Omron VIVA Sync Tool started")
     if config["TRIGGER_MODE"] == "mqtt":
-        logger.info("MQTT trigger mode not implemented yet")
+        logger.info("Using MQTT trigger mode")
+        asyncio.run(mqtt_listener())
     else:
+        logger.info("Using BL passive scan trigger mode")
         asyncio.run(bl_passive_scan())

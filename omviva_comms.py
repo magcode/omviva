@@ -36,10 +36,10 @@ class OmronBLE:
             await self.ble_client.pair(protection_level=2)
             self.logger.info("pair done")
         except BleakDeviceNotFoundError as e:
-            self.logger.error(f"Device not found. {e}")
+            # self.logger.error(f"Device not found. {e}")
             raise e
         except Exception as e:
-            self.logger.error(f"Something else {e}")
+            # self.logger.error(f"Something else {e}")
             raise e
 
     async def disconnect(self):
@@ -145,9 +145,6 @@ class OmronBLE:
         packet = get_filter(last_sequence, reportCountOnly=False)
         await self.send(self.RECORD_ACCESS_CONTROL_POINT, convert_byte_array_to_hex_string(packet))
         await self.send(self.RECORD_ACCESS_CONTROL_POINT, "1000")
-
-        # for buffer in self.rx_raw_channel_buffer:
-        #    self.logger.info("have data " + convert_byte_array_to_hex_string(buffer))
 
         measurements = []
         if self.rx_raw_channel_buffer[2]:

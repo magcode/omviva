@@ -3,9 +3,9 @@
 from enum import Enum, IntFlag, auto
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Optional, List
-from BodyCompositionFeature import BodyCompositionFeature
 import time
 import calendar
+
 
 class OmronMeasurementWS:
     WEIGHT_UNIT_KILOGRAM = "kg"
@@ -19,7 +19,7 @@ class OmronMeasurementWS:
     HEIGHT_RESOLUTION_M_DEFAULT = 0.001
     HEIGHT_RESOLUTION_IN_DEFAULT = 0.1
 
-    def __init__(self, data1: bytes, data2: Optional[bytes] = None, feature: Optional['BodyCompositionFeature'] = None):
+    def __init__(self, data1: bytes, data2: Optional[bytes] = None, feature: Optional["BodyCompositionFeature"] = None):
         self.mWeightUnit = ""
         self.mHeightUnit = ""
         self.mSequenceNumber = None
@@ -47,33 +47,43 @@ class OmronMeasurementWS:
         if data2:
             self._parse(data2, feature)
 
-    def _parse(self, data: bytes, feature: Optional['BodyCompositionFeature']):
+    def _parse(self, data: bytes, feature: Optional["BodyCompositionFeature"]):
         offset = 0
-        flags = Flag.parse(int.from_bytes(data[offset:offset + 3], byteorder='little') & 0x00ffffff)
+        flags = Flag.parse(int.from_bytes(data[offset : offset + 3], byteorder="little") & 0x00FFFFFF)
         offset += 3
 
         if Flag.ImperialUnit in flags:
-            weight_measurement_resolution = feature.get_weight_measurement_resolution_lb() if feature else self.WEIGHT_RESOLUTION_LB_DEFAULT
-            height_measurement_resolution = feature.get_height_measurement_resolution_in() if feature else self.HEIGHT_RESOLUTION_IN_DEFAULT
+            weight_measurement_resolution = (
+                feature.get_weight_measurement_resolution_lb() if feature else self.WEIGHT_RESOLUTION_LB_DEFAULT
+            )
+            height_measurement_resolution = (
+                feature.get_height_measurement_resolution_in() if feature else self.HEIGHT_RESOLUTION_IN_DEFAULT
+            )
             self.mWeightUnit = self.WEIGHT_UNIT_POUND
             self.mHeightUnit = self.HEIGHT_UNIT_INCH
         else:
-            weight_measurement_resolution = feature.get_weight_measurement_resolution_kg() if feature else self.WEIGHT_RESOLUTION_KG_DEFAULT
-            height_measurement_resolution = feature.get_height_measurement_resolution_m() if feature else self.HEIGHT_RESOLUTION_M_DEFAULT
+            weight_measurement_resolution = (
+                feature.get_weight_measurement_resolution_kg() if feature else self.WEIGHT_RESOLUTION_KG_DEFAULT
+            )
+            height_measurement_resolution = (
+                feature.get_height_measurement_resolution_m() if feature else self.HEIGHT_RESOLUTION_M_DEFAULT
+            )
             self.mWeightUnit = self.WEIGHT_UNIT_KILOGRAM
             self.mHeightUnit = self.HEIGHT_UNIT_METER
 
         if Flag.SequenceNumberPresent in flags:
-            self.mSequenceNumber = Decimal(int.from_bytes(data[offset:offset + 2], byteorder='little'))
+            self.mSequenceNumber = Decimal(int.from_bytes(data[offset : offset + 2], byteorder="little"))
             offset += 2
 
         if Flag.WeightPresent in flags:
-            raw_value = int.from_bytes(data[offset:offset + 2], byteorder='little')
-            self.mWeight = Decimal(raw_value * weight_measurement_resolution).quantize(Decimal('1.000'), rounding=ROUND_HALF_UP)
+            raw_value = int.from_bytes(data[offset : offset + 2], byteorder="little")
+            self.mWeight = Decimal(raw_value * weight_measurement_resolution).quantize(
+                Decimal("1.000"), rounding=ROUND_HALF_UP
+            )
             offset += 2
 
         if Flag.TimeStampPresent in flags:
-            self.mTimeStamp = self._parse_timestamp(data[offset:offset + 7])
+            self.mTimeStamp = self._parse_timestamp(data[offset : offset + 7])
             offset += 7
 
         if Flag.UserIDPresent in flags:
@@ -81,61 +91,73 @@ class OmronMeasurementWS:
             offset += 1
 
         if Flag.BMIAndHeightPresent in flags:
-            raw_value = int.from_bytes(data[offset:offset + 2], byteorder='little')
-            self.mBMI = Decimal(raw_value * 0.1).quantize(Decimal('1.000'), rounding=ROUND_HALF_UP)
+            raw_value = int.from_bytes(data[offset : offset + 2], byteorder="little")
+            self.mBMI = Decimal(raw_value * 0.1).quantize(Decimal("1.000"), rounding=ROUND_HALF_UP)
             offset += 2
 
-            raw_value = int.from_bytes(data[offset:offset + 2], byteorder='little')
-            self.mHeight = Decimal(raw_value * height_measurement_resolution).quantize(Decimal('1.0'), rounding=ROUND_HALF_UP)
+            raw_value = int.from_bytes(data[offset : offset + 2], byteorder="little")
+            self.mHeight = Decimal(raw_value * height_measurement_resolution).quantize(
+                Decimal("1.0"), rounding=ROUND_HALF_UP
+            )
             offset += 2
 
         if Flag.BodyFatPercentagePresent in flags:
-            raw_value = int.from_bytes(data[offset:offset + 2], byteorder='little')
-            self.mBodyFatPercentage = Decimal(raw_value * 0.1 * 0.01).quantize(Decimal('1.000'), rounding=ROUND_HALF_UP)
+            raw_value = int.from_bytes(data[offset : offset + 2], byteorder="little")
+            self.mBodyFatPercentage = Decimal(raw_value * 0.1 * 0.01).quantize(Decimal("1.000"), rounding=ROUND_HALF_UP)
             offset += 2
 
         if Flag.BasalMetabolismPresent in flags:
-            self.mBasalMetabolism = Decimal(int.from_bytes(data[offset:offset + 2], byteorder='little'))
+            self.mBasalMetabolism = Decimal(int.from_bytes(data[offset : offset + 2], byteorder="little"))
             offset += 2
 
         if Flag.MusclePercentagePresent in flags:
-            raw_value = int.from_bytes(data[offset:offset + 2], byteorder='little')
-            self.mMusclePercentage = Decimal(raw_value * 0.1 * 0.01).quantize(Decimal('1.000'), rounding=ROUND_HALF_UP)
+            raw_value = int.from_bytes(data[offset : offset + 2], byteorder="little")
+            self.mMusclePercentage = Decimal(raw_value * 0.1 * 0.01).quantize(Decimal("1.000"), rounding=ROUND_HALF_UP)
             offset += 2
 
         if Flag.MuscleMassPresent in flags:
-            raw_value = int.from_bytes(data[offset:offset + 2], byteorder='little')
-            self.mMuscleMass = Decimal(raw_value * weight_measurement_resolution).quantize(Decimal('1.000'), rounding=ROUND_HALF_UP)
+            raw_value = int.from_bytes(data[offset : offset + 2], byteorder="little")
+            self.mMuscleMass = Decimal(raw_value * weight_measurement_resolution).quantize(
+                Decimal("1.000"), rounding=ROUND_HALF_UP
+            )
             offset += 2
 
         if Flag.FatFreeMassPresent in flags:
-            raw_value = int.from_bytes(data[offset:offset + 2], byteorder='little')
-            self.mFatFreeMass = Decimal(raw_value * weight_measurement_resolution).quantize(Decimal('1.000'), rounding=ROUND_HALF_UP)
+            raw_value = int.from_bytes(data[offset : offset + 2], byteorder="little")
+            self.mFatFreeMass = Decimal(raw_value * weight_measurement_resolution).quantize(
+                Decimal("1.000"), rounding=ROUND_HALF_UP
+            )
             offset += 2
 
         if Flag.SoftLeanMassPresent in flags:
-            raw_value = int.from_bytes(data[offset:offset + 2], byteorder='little')
-            self.mSoftLeanMass = Decimal(raw_value * weight_measurement_resolution).quantize(Decimal('1.000'), rounding=ROUND_HALF_UP)
+            raw_value = int.from_bytes(data[offset : offset + 2], byteorder="little")
+            self.mSoftLeanMass = Decimal(raw_value * weight_measurement_resolution).quantize(
+                Decimal("1.000"), rounding=ROUND_HALF_UP
+            )
             offset += 2
 
         if Flag.BodyWaterMassPresent in flags:
-            raw_value = int.from_bytes(data[offset:offset + 2], byteorder='little')
-            self.mBodyWaterMass = Decimal(raw_value * weight_measurement_resolution).quantize(Decimal('1.000'), rounding=ROUND_HALF_UP)
+            raw_value = int.from_bytes(data[offset : offset + 2], byteorder="little")
+            self.mBodyWaterMass = Decimal(raw_value * weight_measurement_resolution).quantize(
+                Decimal("1.000"), rounding=ROUND_HALF_UP
+            )
             offset += 2
 
         if Flag.ImpedancePresent in flags:
-            raw_value = int.from_bytes(data[offset:offset + 2], byteorder='little')
-            self.mImpedance = Decimal(raw_value * 0.1).quantize(Decimal('1.000'), rounding=ROUND_HALF_UP)
+            raw_value = int.from_bytes(data[offset : offset + 2], byteorder="little")
+            self.mImpedance = Decimal(raw_value * 0.1).quantize(Decimal("1.000"), rounding=ROUND_HALF_UP)
             offset += 2
 
         if Flag.SkeletalMusclePercentagePresent in flags:
-            raw_value = int.from_bytes(data[offset:offset + 2], byteorder='little')
-            self.mSkeletalMusclePercentage = Decimal(raw_value * 0.1 * 0.01).quantize(Decimal('1.000'), rounding=ROUND_HALF_UP)
+            raw_value = int.from_bytes(data[offset : offset + 2], byteorder="little")
+            self.mSkeletalMusclePercentage = Decimal(raw_value * 0.1 * 0.01).quantize(
+                Decimal("1.000"), rounding=ROUND_HALF_UP
+            )
             offset += 2
 
         if Flag.VisceralFatLevelPresent in flags:
             raw_value = data[offset]
-            self.mVisceralFatLevel = Decimal(raw_value * 0.5).quantize(Decimal('1.000'), rounding=ROUND_HALF_UP)
+            self.mVisceralFatLevel = Decimal(raw_value * 0.5).quantize(Decimal("1.000"), rounding=ROUND_HALF_UP)
             offset += 1
 
         if Flag.BodyAgePresent in flags:
@@ -155,7 +177,7 @@ class OmronMeasurementWS:
             offset += 1
 
     def _parse_timestamp(self, data: bytes) -> int:
-        year = int.from_bytes(data[0:2], byteorder='little')
+        year = int.from_bytes(data[0:2], byteorder="little")
         month = data[2]
         day = data[3]
         hour = data[4]
@@ -164,18 +186,20 @@ class OmronMeasurementWS:
         dt = f"{year:04}-{month:02}-{day:02} {hour:02}:{minute:02}:{second:02}"
         struct_time = time.strptime(dt, "%Y-%m-%d %H:%M:%S")
         return calendar.timegm(struct_time)
-        
-        
+
     def __str__(self):
-        return (f"OmronMeasurementWS(mWeightUnit='{self.mWeightUnit}', mHeightUnit='{self.mHeightUnit}', "
-                f"mSequenceNumber={self.mSequenceNumber}, mWeight={self.mWeight}, mTimeStamp='{self.mTimeStamp}', "
-                f"mUserID={self.mUserID}, mBMI={self.mBMI}, mHeight={self.mHeight}, mBodyFatPercentage={self.mBodyFatPercentage}, "
-                f"mBasalMetabolism={self.mBasalMetabolism}, mMusclePercentage={self.mMusclePercentage}, mMuscleMass={self.mMuscleMass}, "
-                f"mFatFreeMass={self.mFatFreeMass}, mSoftLeanMass={self.mSoftLeanMass}, mBodyWaterMass={self.mBodyWaterMass}, "
-                f"mImpedance={self.mImpedance}, mSkeletalMusclePercentage={self.mSkeletalMusclePercentage}, mVisceralFatLevel={self.mVisceralFatLevel}, "
-                f"mBodyAge={self.mBodyAge}, mBodyFatPercentageStageEvaluation={self.mBodyFatPercentageStageEvaluation}, "
-                f"mSkeletalMusclePercentageStageEvaluation={self.mSkeletalMusclePercentageStageEvaluation}, "
-                f"mVisceralFatLevelStageEvaluation={self.mVisceralFatLevelStageEvaluation})")
+        return (
+            f"OmronMeasurementWS(mWeightUnit='{self.mWeightUnit}', mHeightUnit='{self.mHeightUnit}', "
+            f"mSequenceNumber={self.mSequenceNumber}, mWeight={self.mWeight}, mTimeStamp='{self.mTimeStamp}', "
+            f"mUserID={self.mUserID}, mBMI={self.mBMI}, mHeight={self.mHeight}, mBodyFatPercentage={self.mBodyFatPercentage}, "
+            f"mBasalMetabolism={self.mBasalMetabolism}, mMusclePercentage={self.mMusclePercentage}, mMuscleMass={self.mMuscleMass}, "
+            f"mFatFreeMass={self.mFatFreeMass}, mSoftLeanMass={self.mSoftLeanMass}, mBodyWaterMass={self.mBodyWaterMass}, "
+            f"mImpedance={self.mImpedance}, mSkeletalMusclePercentage={self.mSkeletalMusclePercentage}, mVisceralFatLevel={self.mVisceralFatLevel}, "
+            f"mBodyAge={self.mBodyAge}, mBodyFatPercentageStageEvaluation={self.mBodyFatPercentageStageEvaluation}, "
+            f"mSkeletalMusclePercentageStageEvaluation={self.mSkeletalMusclePercentageStageEvaluation}, "
+            f"mVisceralFatLevelStageEvaluation={self.mVisceralFatLevelStageEvaluation})"
+        )
+
 
 class Flag(IntFlag):
     ImperialUnit = 1
@@ -201,5 +225,64 @@ class Flag(IntFlag):
     MultiplePacketMeasurement = 1 << 20
 
     @staticmethod
-    def parse(bits: int) -> List['Flag']:
+    def parse(bits: int) -> List["Flag"]:
         return [flag for flag in Flag if flag & bits]
+
+
+class BodyCompositionFeature:
+    WEIGHT_RESOLUTION_KG = [0.005, 0.5, 0.2, 0.1, 0.05, 0.02, 0.01, 0.005]
+    WEIGHT_RESOLUTION_LB = [0.01, 1.0, 0.5, 0.2, 0.1, 0.05, 0.02, 0.01]
+    HEIGHT_RESOLUTION_M = [0.001, 0.01, 0.005, 0.001]
+    HEIGHT_RESOLUTION_IN = [0.1, 1.0, 0.5, 0.1]
+
+    def __init__(self, data: bytes):
+        feature = int.from_bytes(data[:4], byteorder="little")
+        self.mSupportedFlags = SupportedFlag.parse(feature)
+        number_of_weight_measurement_resolution = (feature >> 11) & 0x0000000F
+        self.mWeightMeasurementResolutionKG = self.WEIGHT_RESOLUTION_KG[number_of_weight_measurement_resolution]
+        self.mWeightMeasurementResolutionLB = self.WEIGHT_RESOLUTION_LB[number_of_weight_measurement_resolution]
+        number_of_height_measurement_resolution = (feature >> 15) & 0x00000007
+        self.mHeightMeasurementResolutionM = self.HEIGHT_RESOLUTION_M[number_of_height_measurement_resolution]
+        self.mHeightMeasurementResolutionIn = self.HEIGHT_RESOLUTION_IN[number_of_height_measurement_resolution]
+
+    def __str__(self):
+        return (
+            f"BodyCompositionFeature(mSupportedFlags={self.mSupportedFlags}, "
+            f"mWeightMeasurementResolutionKG={self.mWeightMeasurementResolutionKG}, "
+            f"mWeightMeasurementResolutionLB={self.mWeightMeasurementResolutionLB}, "
+            f"mHeightMeasurementResolutionM={self.mHeightMeasurementResolutionM}, "
+            f"mHeightMeasurementResolutionIn={self.mHeightMeasurementResolutionIn})"
+        )
+
+    def get_supported_flags(self):
+        return self.mSupportedFlags
+
+    def get_weight_measurement_resolution_kg(self):
+        return self.mWeightMeasurementResolutionKG
+
+    def get_weight_measurement_resolution_lb(self):
+        return self.mWeightMeasurementResolutionLB
+
+    def get_height_measurement_resolution_m(self):
+        return self.mHeightMeasurementResolutionM
+
+    def get_height_measurement_resolution_in(self):
+        return self.mHeightMeasurementResolutionIn
+
+
+class SupportedFlag(IntFlag):
+    TimeStamp = 1
+    MultipleUsers = 1 << 1
+    BasalMetabolism = 1 << 2
+    MusclePercentage = 1 << 3
+    MuscleMass = 1 << 4
+    FatFreeMass = 1 << 5
+    SoftLeanMass = 1 << 6
+    BodyWaterMass = 1 << 7
+    Impedance = 1 << 8
+    Weight = 1 << 9
+    Height = 1 << 10
+
+    @staticmethod
+    def parse(bits: int) -> List["SupportedFlag"]:
+        return [flag for flag in SupportedFlag if flag & bits]
