@@ -16,6 +16,8 @@ from bleak.backends.bluezdbus.scanner import BlueZScannerArgs
 from bleak.backends.scanner import AdvertisementData
 from scp import SCPClient
 import paramiko
+from signal import SIGINT, SIGTERM
+import sys
 
 
 logger = None
@@ -26,15 +28,26 @@ scanner = None
 DATABASE_NAME = "viva_measurements.db"
 
 
+def signal_handler():
+    logger.info("Exiting")
+    sys.exit(0)
+
+
 async def mqtt_listener():
     # this assumes that "something" is informing us that the Omron VIVA is ready to be read
     # this something can be a bluetooth passive scanning script on a shelly bluetooth device
+    loop = asyncio.get_running_loop()
+    loop.add_signal_handler(SIGINT, signal_handler)
+    loop.add_signal_handler(SIGTERM, signal_handler)
     async with Client(config["MQTT_HOST"]) as client:
         await client.subscribe(config["MQTT_TOPIC"])
-        async for message in client.messages:
-            if isReading is False:
-                logger.info("Got sync command via MQTT")
-                await sync()
+        try:
+            async for message in client.messages:
+                if isReading is False:
+                    logger.info("Got sync command via MQTT")
+                    await sync()
+        except asyncio.CancelledError:
+            logger.info("MQTT listener cancelled")
 
 
 def scp_transfer(local_file, remote_file, hostname, username, password):
