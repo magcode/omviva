@@ -82,54 +82,23 @@ class OmronBLE:
                 self.logger.info(f"NumberOfStoredRecordsResponse: {raw_value}")
 
     async def register_user(self, user_index):
-        await asyncio.sleep(10)
-        await self._enable_rx_channel_notify_and_callback()
-
-        self.logger.info("Step 1")
-        packet = get_register_new_user(user_index)
-        await self.ble_client.write_gatt_char("00002a9f-0000-1000-8000-00805f9b34fb", packet)
-
-        await asyncio.sleep(3)
-        self.logger.info("Step 2 Consent")
-        packet = get_consent(user_index)
-        await self.ble_client.write_gatt_char("00002a9f-0000-1000-8000-00805f9b34fb", packet)
-        await asyncio.sleep(3)
-
-        self.logger.info("Step 7")
-        await self.ble_client.write_gatt_char("00002a52-0000-1000-8000-00805f9b34fb", bytearray.fromhex("0401")[:16])
-        await asyncio.sleep(3)
-
-        self.logger.info("Step 8")
-        await self.ble_client.write_gatt_char("00002a52-0000-1000-8000-00805f9b34fb", bytearray.fromhex("0101")[:16])
-        await asyncio.sleep(3)
-
-        self.logger.info("Step 9")
-        await self.ble_client.write_gatt_char("00002a52-0000-1000-8000-00805f9b34fb", bytearray.fromhex("1000")[:16])
-        await asyncio.sleep(3)
-
-        await self._disable_rx_channel_notify_and_callback()
-
-    async def register_user2(self, user_index):
         self.logger.info(f"Register user started for user #{user_index}")
         await self._enable_rx_channel_notify_and_callback()
 
         self.logger.info("Step 1")
         packet = get_register_new_user(user_index)
-        await self.send("00002a9f-0000-1000-8000-00805f9b34fb", convert_byte_array_to_hex_string(packet))
+        await self.send(self.USER_CONTROL_POINT, convert_byte_array_to_hex_string(packet))
 
         self.logger.info("Step 2 Consent")
         packet = get_consent(user_index)
-        await self.send("00002a9f-0000-1000-8000-00805f9b34fb", convert_byte_array_to_hex_string(packet))
-        await asyncio.sleep(3)
+        await self.send(self.USER_CONTROL_POINT, convert_byte_array_to_hex_string(packet))
+        last_sequence = 0
+        packet = get_filter(last_sequence, reportCountOnly=True)
+        await self.send(self.RECORD_ACCESS_CONTROL_POINT, convert_byte_array_to_hex_string(packet))
 
-        self.logger.info("Step 3 Request count")
-        await self.send("00002a52-0000-1000-8000-00805f9b34fb", "0401")
-
-        self.logger.info("Step 4 Request data")
-        await self.send("00002a52-0000-1000-8000-00805f9b34fb", "0101")
-
-        self.logger.info("Step 5 Finish")
-        await self.send("00002a52-0000-1000-8000-00805f9b34fb", "1000")
+        packet = get_filter(last_sequence, reportCountOnly=False)
+        await self.send(self.RECORD_ACCESS_CONTROL_POINT, convert_byte_array_to_hex_string(packet))
+        await self.send(self.RECORD_ACCESS_CONTROL_POINT, "1000")
 
         await self._disable_rx_channel_notify_and_callback()
 
