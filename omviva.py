@@ -1,13 +1,12 @@
+from malog import setupLogging
 from datetime import datetime
 
 from aiomqtt import Client
 from omviva_comms import OmronBLE
 import asyncio
-import logging
 import json
 from pathlib import Path
-from custom_logging import setupLogging
-from persistence import VivaPersistence
+from omviva_persistence import VivaPersistence
 from bleak import BleakScanner
 from bleak.backends.device import BLEDevice
 from bleak.assigned_numbers import AdvertisementDataType
@@ -18,6 +17,7 @@ from scp import SCPClient
 import paramiko
 from signal import SIGINT, SIGTERM
 import sys
+import argparse
 
 
 logger = None
@@ -43,9 +43,13 @@ async def mqtt_listener():
         await client.subscribe(config["MQTT_TOPIC"])
         try:
             async for message in client.messages:
+                logger.info(f"Got sync command via MQTT on {message.topic} with {message.payload.decode()}")                    
                 if isReading is False:
-                    logger.info("Got sync command via MQTT")
+                    logger.info("Starting sync")
                     await sync()
+                    logger.info("Sync done")
+                else:
+                    logger.info("Sync already in progress, ignoring MQTT command")
         except asyncio.CancelledError:
             logger.info("MQTT listener cancelled")
 
@@ -66,9 +70,6 @@ def getConfig():
     with configFile.open("r") as jsonfile:
         config = json.load(jsonfile)
         return config
-
-
-# Example usage
 
 
 async def sync():
@@ -113,9 +114,6 @@ async def sync():
             persistence.store_success(user)
             await viva.disconnect()
             success = True
-        except Exception as e:
-            logger.error(f"Error syncing (attempt {attempts}): {e}")
-        finally:
             persistence.close()
             if config["SCP_HOST"]:
                 scp_transfer(
@@ -126,16 +124,19 @@ async def sync():
                     config["SCP_PASSWORD"],
                 )
                 logger.info("Database transferred to remote host")
+            break
+        except Exception as e:
+            logger.error(f"Error syncing (attempt {attempts}): {e}")
+        finally:
+            persistence.close()
 
         if attempts > 3:
             logger.error("Max attempts reached, aborting sync")
             break
     isReading = False
+    await mqtt_listener()
 
-
-async def pair():
-    # TODO
-    user = 2
+async def pair(user):
     viva = OmronBLE(logger=logger, bleAddr=config["VIVA_MAC"])
 
     try:
@@ -143,7 +144,7 @@ async def pair():
         await viva.register_user(user)
         await viva.disconnect()
     except Exception as e:
-        logger.error(f"Error: {e}")
+        logger.error(f"Pair Error: {e}")
 
 
 async def bl_passive_scan_callback(device: BLEDevice, advertisement_data: AdvertisementData):
@@ -183,9 +184,19 @@ async def bl_passive_scan():
 
 if __name__ == "__main__":
     config = getConfig()
-    logger = logging.getLogger("omviva")
-    setupLogging(logger, config)
+
+    logger = setupLogging(config)
     logger.info("Omron VIVA Sync Tool started")
+
+    parser = argparse.ArgumentParser(description="Omron VIVA Sync Tool")
+    parser.add_argument("-pair", type=int, help="Pair with a new user")
+    args = parser.parse_args()
+
+    if args.pair:
+        logger.info(f"Pairing with user #{args.pair}")
+        asyncio.run(pair(args.pair))
+        sys.exit(0)
+
     if config["TRIGGER_MODE"] == "mqtt":
         logger.info("Using MQTT trigger mode")
         asyncio.run(mqtt_listener())
