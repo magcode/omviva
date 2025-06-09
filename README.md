@@ -6,6 +6,7 @@ The data will be persisted into a simple local SQLite database.
 ```
 git clone git@github.com:magcode/omviva.git
 cd omviva
+cp config-example.json config.json
 pip3 install -r requirements.txt
 ```
 
@@ -104,7 +105,9 @@ if(BLEConfig.enable === false) {
 ```
 
 
-# install as a service
+# Install as a service
+
+Run the following commands:
 
 ```
 curuser=`whoami`

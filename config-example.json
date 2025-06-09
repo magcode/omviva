@@ -1,0 +1,17 @@
+{
+    "VIVA_MAC": "00:AA:AA:AA:AA:AA",
+    "TRIGGER_MODE": "mqtt",
+    "MQTT_HOST": "broker",
+    "MQTT_PORT": 1883,
+    "MQTT_TOPIC": "home/blegateway/omviva",
+    "NO_OF_USERS": 3,
+    "LOG_LEVEL": "DEBUG",
+    "LOG_CONSOLE": true,
+    "LOG_LOKI": false,
+    "LOG_APP": "omviva",
+    "LOKI_URL": "http://myloki.lan:3100",
+    "SCP_HOST": "myserver",
+    "SCP_USER": "user",
+    "SCP_PASSWORD": "password",
+    "SCP_PATH": "/opt/omviva/"
+}
