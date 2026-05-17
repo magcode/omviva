@@ -11,16 +11,17 @@ pip3 install -r requirements.txt
 ```
 
 # Pair
-For every user (1-4) you need to "pair" the scale with your Linux server.
+For every user (1-4) you need to "pair" the scale with your Linux server. This may also be required after battery change.
 
-Turn on the scale
-Select the user by pressing the "arrow right" button
-Long press the Bluetooth button
+- Turn on the scale
+- Select the user by pressing the "arrow right" button
+- Long press the "Bluetooth" button
 
 ```
 python3 omviva.py -pair 3
 ```
 You should eventually see "OK" and hear two beeps.
+If you have issues, run `bluetoothctl` in another shell and watch what is going on.
 
 # Trigger the sync
 You can either trigger the sync/download of data using a Bluetooth Agent Service running on the same machine. This uses passive scanning and recognized the Omviva device. The second option is to use any other device to detect the Omviva and publish this information using MQTT.
