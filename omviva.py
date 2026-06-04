@@ -1,7 +1,7 @@
 from malog import setupLogging
 from datetime import datetime
 
-from aiomqtt import Client
+from aiomqtt import Client, MqttError
 from omviva_comms import OmronBLE
 import asyncio
 import json
@@ -43,13 +43,16 @@ async def mqtt_listener():
         await client.subscribe(config["MQTT_TOPIC"])
         try:
             async for message in client.messages:
-                logger.info(f"Got sync command via MQTT on {message.topic} with {message.payload.decode()}")                    
+                logger.info(f"Got sync command via MQTT on {message.topic} with {message.payload.decode()}")
                 if isReading is False:
                     logger.info("Starting sync")
                     await sync()
                     logger.info("Sync done")
                 else:
                     logger.info("Sync already in progress, ignoring MQTT command")
+        except MqttError as e:
+            logger.error(f"MQTT Error: {e}. Reconnect in 5 sec ...")
+            await asyncio.sleep(5)
         except asyncio.CancelledError:
             logger.info("MQTT listener cancelled")
 
@@ -135,6 +138,7 @@ async def sync():
             break
     isReading = False
     await mqtt_listener()
+
 
 async def pair(user):
     viva = OmronBLE(logger=logger, bleAddr=config["VIVA_MAC"])
