@@ -1,1 +1,2 @@
 git+https://github.com/magcode/mqtt-tools.git@master#egg=malog&subdirectory=python
+scp

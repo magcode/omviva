@@ -4,9 +4,12 @@ The data will be persisted into a simple local SQLite database.
 
 # Install
 ```
+cd ~
 git clone git@github.com:magcode/omviva.git
 cd omviva
 cp config-example.json config.json
+python3 -m venv venv1
+source venv1/bin/activate
 pip3 install -r requirements.txt
 ```
 
@@ -17,11 +20,22 @@ For every user (1-4) you need to "pair" the scale with your Linux server. This m
 - Select the user by pressing the "arrow right" button
 - Long press the "Bluetooth" button
 
+Open one terminal and start `bluetoothctl`
 ```
-python3 omviva.py -pair 3
+devices
+# find the "BLEsmart" device
+connect <mac address of the device>
+# leave bluetoothctl open
 ```
+
+In a second session
+```
+python3 omviva.py -pair <user number 1-4>
+```
+
+The `bluetoothctl` session may ask for a pairing. Confirm it.
 You should eventually see "OK" and hear two beeps.
-If you have issues, run `bluetoothctl` in another shell and watch what is going on.
+Continue with the user user numbers.
 
 # Trigger the sync
 You can either trigger the sync/download of data using a Bluetooth Agent Service running on the same machine. This uses passive scanning and recognized the Omviva device. The second option is to use any other device to detect the Omviva and publish this information using MQTT.
@@ -109,16 +123,16 @@ if(BLEConfig.enable === false) {
 # Install as a service
 
 Run the following commands:
+curuser=`whoami`
 
 ```
-curuser=`whoami`
 __service="
 [Unit]
 Description=Omron Viva Sync Service
 
 [Service]
-WorkingDirectory=/home/marko/omviva
-ExecStart=/home/marko/pythonenv/bin/python3 /home/marko/omviva/omviva.py
+WorkingDirectory=/home/$curuser/omviva
+ExecStart=/home/$curuser/venv1/bin/python3 /home/$curuser/omviva/omviva.py
 User=$curuser
 Environment=
 
