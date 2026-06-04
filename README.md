@@ -35,7 +35,7 @@ python3 omviva.py -pair <user number 1-4>
 
 The `bluetoothctl` session may ask for a pairing. Confirm it.
 You should eventually see "OK" and hear two beeps.
-Continue with the user user numbers.
+Continue with the other user numbers.
 
 # Trigger the sync
 You can either trigger the sync/download of data using a Bluetooth Agent Service running on the same machine. This uses passive scanning and recognized the Omviva device. The second option is to use any other device to detect the Omviva and publish this information using MQTT.
